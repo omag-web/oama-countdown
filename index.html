@@ -275,12 +275,35 @@
   }
   .banner.show { transform: translate(-50%, 0); }
 
+  /* +/- time nudge readout */
+  .nudge {
+    position: absolute;
+    left: 50%; bottom: 18%;
+    transform: translate(-50%, 0);
+    font-size: calc(var(--ring) * 0.06);
+    font-weight: 600;
+    letter-spacing: .1em;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .nudge.go { animation: nudge 1.4s ease-out; }
+  @keyframes nudge {
+    0%   { opacity: 0; transform: translate(-50%, 8px); }
+    15%  { opacity: 1; transform: translate(-50%, 0); }
+    70%  { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -6px); }
+  }
+  body.break-mode .session { color: var(--white); }
+
   @media (prefers-reduced-motion: reduce) {
     .flash.go { animation: none; }
     body.alerting .frame, body.alerting .corner,
     body.finished .frame, body.finished .corner,
     body.finished .time { animation: none; }
     .banner { transition: none; }
+    .nudge.go { animation-duration: .01s; }
   }
 </style>
 </head>
@@ -317,16 +340,18 @@
         <div class="time" id="time">30:00</div>
         <div class="status" id="status">Roundtable</div>
       </div>
+      <div class="nudge" id="nudge"></div>
     </div>
 
     <div class="modes">
-      <button class="mode active" id="mode30" type="button">30 Min</button>
-      <button class="mode" id="mode10" type="button">10 Min</button>
+      <button class="mode active" id="btn-session" type="button" data-mode="session">30 Min</button>
+      <button class="mode" id="btn-short" type="button" data-mode="short">10 Min</button>
+      <button class="mode" id="btn-break" type="button" data-mode="break">Break</button>
     </div>
 
   </main>
 
-  <button class="icon-btn" id="resetBtn" type="button" hidden title="Reset the session count to zero">Reset count</button>
+  <button class="icon-btn" id="resetBtn" type="button" hidden title="Reset the session count and timer lengths">Reset</button>
   <button class="icon-btn" id="fsBtn" type="button" title="Fullscreen (F)" aria-label="Toggle fullscreen">
     <svg viewBox="0 0 24 24" id="fsIcon"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
   </button>
@@ -336,8 +361,19 @@
   const $ = id => document.getElementById(id);
   const body = document.body;
   const timeEl = $('time'), statusEl = $('status'), progress = $('progress');
-  const banner = $('banner'), flash = $('flash');
-  const STORE_KEY = 'oama-roundtable-session-count';
+  const banner = $('banner'), flash = $('flash'), nudgeEl = $('nudge');
+  const COUNT_KEY = 'oama-roundtable-session-count';
+  const LENGTH_KEY = 'oama-roundtable-lengths';
+  const STEP_MIN = 1;      // + / - changes time by this many minutes
+  const MAX_MIN = 180;
+
+  // Three timers. "session" counts toward the roundtable number.
+  const DEFAULTS = { session: 30, short: 10, break: 15 };
+  const MODES = {
+    session: { status: 'Roundtable', btn: 'btn-session' },
+    short:   { status: 'Discussion', btn: 'btn-short' },
+    break:   { status: 'Break',      btn: 'btn-break' }
+  };
 
   // Ring geometry
   const R = 88, CIRC = 2 * Math.PI * R;
@@ -359,9 +395,18 @@
   const logo = $('logo');
   logo.addEventListener('error', () => { logo.hidden = true; $('wordmark').hidden = false; });
 
+  // Saved timer lengths (per machine)
+  let lengths = { ...DEFAULTS };
+  try {
+    const saved = JSON.parse(localStorage.getItem(LENGTH_KEY) || 'null');
+    if (saved) for (const k in DEFAULTS) if (Number.isFinite(saved[k])) lengths[k] = saved[k];
+  } catch (e) {}
+  function saveLengths() { try { localStorage.setItem(LENGTH_KEY, JSON.stringify(lengths)); } catch (e) {} }
+
   // State
-  let durationMin = 30;
+  let mode = 'session';
   let endAt = 0;           // timestamp when the current run ends
+  let runTotal = 0;        // ms the ring represents for this run
   let running = false;
   let finished = false;
   let fired = {};          // milestones already shown this run
@@ -370,18 +415,33 @@
 
   // Session counter (persists on this machine)
   let sessionCount = 0;
-  try { sessionCount = parseInt(localStorage.getItem(STORE_KEY), 10) || 0; } catch (e) {}
-  function saveCount() { try { localStorage.setItem(STORE_KEY, String(sessionCount)); } catch (e) {} }
+  try { sessionCount = parseInt(localStorage.getItem(COUNT_KEY), 10) || 0; } catch (e) {}
+  function saveCount() { try { localStorage.setItem(COUNT_KEY, String(sessionCount)); } catch (e) {} }
+
+  function isCustomized() { return Object.keys(DEFAULTS).some(k => lengths[k] !== DEFAULTS[k]); }
+
   function renderSession() {
     const s = $('session');
-    if (sessionCount > 0) {
+    body.classList.toggle('break-mode', mode === 'break');
+    if (mode === 'break') {
+      $('sessionText').textContent = 'Break';
+      s.classList.remove('empty');
+    } else if (sessionCount > 0) {
       $('sessionText').textContent = 'Roundtable Session #' + sessionCount;
       s.classList.remove('empty');
-      $('resetBtn').hidden = false;
     } else {
       $('sessionText').textContent = 'Ready';
       s.classList.add('empty');
-      $('resetBtn').hidden = true;
+    }
+    $('resetBtn').hidden = !(sessionCount > 0 || isCustomized());
+  }
+
+  function renderButtons() {
+    for (const k in MODES) {
+      const b = $(MODES[k].btn);
+      b.classList.toggle('active', k === mode);
+      if (k !== 'break') b.textContent = lengths[k] + ' Min';
+      else b.textContent = 'Break · ' + lengths[k];
     }
   }
 
@@ -396,8 +456,8 @@
   }
 
   function showIdle() {
-    timeEl.textContent = fmt(durationMin * 60000);
-    statusEl.textContent = durationMin === 30 ? 'Roundtable' : 'Ten minutes';
+    timeEl.textContent = fmt(lengths[mode] * 60000);
+    statusEl.textContent = MODES[mode].status;
     setRing(1);
   }
 
@@ -407,18 +467,25 @@
     banner.textContent = text;
     banner.classList.add('show');
     clearTimeout(milestone.t1); clearTimeout(milestone.t2);
-    milestone.t1 = setTimeout(() => banner.classList.remove('show'), text === "Time's Up" ? 6000 : 4500);
+    milestone.t1 = setTimeout(() => banner.classList.remove('show'), text.indexOf('Up') > -1 || text.indexOf('Over') > -1 ? 6000 : 4500);
     milestone.t2 = setTimeout(() => body.classList.remove('alerting'), 3000);
+  }
+
+  // Re-arm alerts that are still ahead (after adding time)
+  function rearm(leftMs) {
+    const secs = Math.ceil(leftMs / 1000);
+    if (secs > 300) fired.five = false;
+    if (secs > 60) fired.one = false;
+    if (runTotal <= 300000) fired.five = true;
   }
 
   function tick() {
     const left = endAt - Date.now();
-    const totalMs = durationMin * 60000;
     timeEl.textContent = fmt(left);
-    setRing(left / totalMs);
+    setRing(left / runTotal);
 
     const secs = Math.ceil(left / 1000);
-    if (secs <= 300 && totalMs > 300000 && !fired.five) { fired.five = true; milestone('5 Minutes Left'); }
+    if (secs <= 300 && !fired.five) { fired.five = true; milestone('5 Minutes Left'); }
     if (secs <= 60 && !fired.one) { fired.one = true; milestone('1 Minute Left'); }
     body.classList.toggle('warn', secs <= 60);
 
@@ -426,43 +493,82 @@
     rafId = requestAnimationFrame(tick);
   }
 
-  function start() {
+  function run(ms, countIt) {
     cancelAnimationFrame(rafId);
     finished = false;
     running = true;
     fired = {};
-    if (durationMin * 60 <= 300) fired.five = true;
+    runTotal = ms;
+    endAt = Date.now() + ms;
+    rearm(ms);
+    // Starting with 5 min or less: don't fire the 5-minute alert immediately
+    if (ms <= 300000) fired.five = true;
+    if (ms <= 60000) fired.one = true;
     body.classList.remove('finished', 'warn', 'alerting');
     body.classList.add('running');
     banner.classList.remove('show');
-    statusEl.textContent = durationMin === 30 ? 'Roundtable' : 'Ten minutes';
-    if (durationMin === 30) { sessionCount++; saveCount(); renderSession(); }
-    endAt = Date.now() + durationMin * 60000;
+    statusEl.textContent = MODES[mode].status;
+    if (countIt && mode === 'session') { sessionCount++; saveCount(); }
+    renderSession();
     requestWake();
     tick();
   }
+
+  function start() { run(lengths[mode] * 60000, true); }
 
   function finish() {
     running = false;
     finished = true;
     timeEl.textContent = '00:00';
     setRing(0);
-    statusEl.textContent = "Time's up";
+    statusEl.textContent = mode === 'break' ? 'Break is over' : "Time's up";
     body.classList.remove('running', 'warn');
     body.classList.add('finished');
-    milestone("Time's Up");
+    milestone(mode === 'break' ? 'Break Is Over' : "Time's Up");
   }
 
-  function setMode(min) {
-    if (min === durationMin && (running || finished)) return;
-    durationMin = min;
-    $('mode30').classList.toggle('active', min === 30);
-    $('mode10').classList.toggle('active', min === 10);
+  function setMode(next) {
+    if (next === mode && (running || finished)) return;
+    mode = next;
     cancelAnimationFrame(rafId);
     running = false; finished = false;
     body.classList.remove('running', 'finished', 'warn', 'alerting');
     banner.classList.remove('show');
+    renderButtons();
+    renderSession();
     showIdle();
+  }
+
+  function showNudge(min) {
+    nudgeEl.textContent = (min > 0 ? '+' : '−') + Math.abs(min) + ':00';
+    nudgeEl.classList.remove('go'); void nudgeEl.offsetWidth; nudgeEl.classList.add('go');
+  }
+
+  // + / - : change the running countdown, extend a finished one, or change the selected length
+  function adjust(dir) {
+    const deltaMs = dir * STEP_MIN * 60000;
+    if (running) {
+      const left = endAt - Date.now();
+      const newLeft = Math.min(MAX_MIN * 60000, left + deltaMs);
+      if (newLeft <= 1000) { endAt = Date.now(); showNudge(dir * STEP_MIN); return; }
+      endAt = Date.now() + newLeft;
+      runTotal = Math.max(runTotal + deltaMs, newLeft);
+      rearm(newLeft);
+      showNudge(dir * STEP_MIN);
+    } else if (finished) {
+      if (dir < 0) return;
+      run(deltaMs, false);   // overtime: no new session number
+      showNudge(STEP_MIN);
+    } else {
+      const next = Math.max(1, Math.min(MAX_MIN, lengths[mode] + dir * STEP_MIN));
+      if (next === lengths[mode]) return;
+      lengths[mode] = next;
+      saveLengths();
+      renderButtons();
+      renderSession();
+      showIdle();
+      showNudge(dir * STEP_MIN);
+    }
   }
 
   // Fullscreen
@@ -498,22 +604,30 @@
 
   // Inputs
   $('clock').addEventListener('click', start);
-  $('mode30').addEventListener('click', e => { e.currentTarget.blur(); setMode(30); });
-  $('mode10').addEventListener('click', e => { e.currentTarget.blur(); setMode(10); });
+  document.querySelectorAll('.mode').forEach(b =>
+    b.addEventListener('click', e => { e.currentTarget.blur(); setMode(e.currentTarget.dataset.mode); }));
   $('fsBtn').addEventListener('click', e => { e.currentTarget.blur(); toggleFullscreen(); });
   $('resetBtn').addEventListener('click', e => {
     e.currentTarget.blur();
-    sessionCount = 0; saveCount(); renderSession();
+    sessionCount = 0; saveCount();
+    lengths = { ...DEFAULTS }; saveLengths();
+    renderButtons(); renderSession();
+    if (!running && !finished) showIdle();
   });
 
   // Presentation clickers send PageDown/PageUp/arrows; keyboard Space/Enter
-  const RESTART_KEYS = new Set([' ', 'Spacebar', 'Enter', 'ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'PageDown', 'PageUp', 'b', 'B', '.']);
+  const RESTART_KEYS = new Set([' ', 'Spacebar', 'Enter', 'ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'PageDown', 'PageUp']);
   document.addEventListener('keydown', e => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;   // leave browser zoom etc. alone
+    const k = e.key;
+    if (k === '+' || k === '=' || e.code === 'NumpadAdd') { e.preventDefault(); adjust(1); return; }
+    if (k === '-' || k === '_' || e.code === 'NumpadSubtract') { e.preventDefault(); adjust(-1); return; }
     if (e.repeat) return;
-    if (RESTART_KEYS.has(e.key)) { e.preventDefault(); start(); return; }
-    if (e.key === '3') setMode(30);
-    else if (e.key === '1') setMode(10);
-    else if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+    if (RESTART_KEYS.has(k)) { e.preventDefault(); start(); return; }
+    if (k === '3') setMode('session');
+    else if (k === '1') setMode('short');
+    else if (k === 'b' || k === 'B') setMode('break');
+    else if (k === 'f' || k === 'F') toggleFullscreen();
   });
 
   // Hide the cursor after a few idle seconds
@@ -528,6 +642,7 @@
     }, 2500);
   });
 
+  renderButtons();
   renderSession();
   showIdle();
 })();
