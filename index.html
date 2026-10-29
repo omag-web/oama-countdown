@@ -414,6 +414,20 @@
   try { sessionCount = parseInt(localStorage.getItem(COUNT_KEY), 10) || 0; } catch (e) {}
   function saveCount() { try { localStorage.setItem(COUNT_KEY, String(sessionCount)); } catch (e) {} }
 
+  // [ and ] fix the roundtable number without touching the timer
+  function setCount(n) {
+    sessionCount = Math.max(0, Math.min(999, n));
+    saveCount();
+    const wasBreak = mode === 'break';
+    renderSession();
+    // On a break the label says "Break", so show the number briefly
+    if (wasBreak) {
+      $('sessionText').textContent = sessionCount > 0 ? 'Next: Session #' + (sessionCount + 1) : 'Ready';
+      clearTimeout(setCount.t);
+      setCount.t = setTimeout(renderSession, 2000);
+    }
+  }
+
   function renderSession() {
     const s = $('session');
     body.classList.toggle('break-mode', mode === 'break');
@@ -620,6 +634,8 @@
     else if (k === '1') setMode('short');
     else if (k === 'b' || k === 'B') setMode('break');
     else if (k === 'r' || k === 'R') setMode(mode);   // stop and reset the current timer
+    else if (k === ']' || k === '}') setCount(sessionCount + 1);
+    else if (k === '[' || k === '{') setCount(sessionCount - 1);
     else if (k === 'f' || k === 'F') toggleFullscreen();
   });
 
