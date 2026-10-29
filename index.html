@@ -619,6 +619,7 @@
     if (k === '3') setMode('session');
     else if (k === '1') setMode('short');
     else if (k === 'b' || k === 'B') setMode('break');
+    else if (k === 'r' || k === 'R') setMode(mode);   // stop and reset the current timer
     else if (k === 'f' || k === 'F') toggleFullscreen();
   });
 
