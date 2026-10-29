@@ -14,6 +14,7 @@ Full-screen countdown timer for OAMA Conference roundtable sessions. Open `index
 | `[` / `]` | Lower or raise the roundtable session number |
 | `+` / `-` | Add or remove 1 minute (see below) |
 | `F` | Toggle fullscreen |
+| `H` | Show or hide the shortcut screen (Esc also closes it) |
 
 - `+` / `-` while a timer runs changes the time left. When stopped, it changes that timer's length. Pressing `3`, `1`, or `B` stops the timer and puts every length back to its default (30 / 10 / 15). After time is up, `+` adds an extra minute without counting a new session.
 - The timer buttons are hidden and fade in only while the mouse moves.

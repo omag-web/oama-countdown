@@ -297,6 +297,81 @@
   }
   body.break-mode .session { color: var(--white); }
 
+  /* Shortcut help overlay (H) */
+  .help {
+    position: fixed; inset: 0;
+    z-index: 60;
+    display: grid;
+    place-items: center;
+    background: rgba(8, 8, 8, 0.88);
+    backdrop-filter: blur(6px);
+    padding: 4vh max(16px, 4vw);
+  }
+  .help[hidden] { display: none; }
+  .help-panel {
+    width: min(1080px, 100%);
+    max-height: 100%;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--accent);
+    padding: clamp(20px, 4vh, 44px) clamp(20px, 3.5vw, 52px);
+  }
+  .help h2 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: clamp(26px, 4vh, 44px);
+    color: var(--white);
+    margin-bottom: clamp(14px, 2.6vh, 28px);
+  }
+  .help-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: clamp(14px, 2.4vh, 26px) clamp(24px, 4vw, 56px);
+  }
+  .help-group h3 {
+    font-size: clamp(12px, 1.6vh, 16px);
+    font-weight: 400;
+    letter-spacing: .28em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: .7em;
+  }
+  .help-row {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    padding: .45em 0;
+    border-bottom: 1px solid var(--border);
+    font-size: clamp(15px, 2vh, 21px);
+    color: var(--text);
+    font-weight: 300;
+    letter-spacing: .03em;
+  }
+  .help-row:last-child { border-bottom: 0; }
+  .keys { display: flex; gap: 6px; flex-wrap: wrap; min-width: 4.6em; flex-shrink: 0; }
+  kbd {
+    font-family: var(--ui);
+    font-weight: 600;
+    font-size: .85em;
+    min-width: 1.9em;
+    text-align: center;
+    padding: .12em .5em;
+    color: var(--white);
+    background: var(--bg);
+    border: 1px solid var(--muted);
+    border-bottom-width: 3px;
+    border-radius: 4px;
+  }
+  .help-foot {
+    margin-top: clamp(14px, 2.6vh, 26px);
+    font-size: clamp(12px, 1.6vh, 15px);
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  @media (max-width: 700px) { .help-grid { grid-template-columns: 1fr; } }
+
   @media (prefers-reduced-motion: reduce) {
     .flash.go { animation: none; }
     body.alerting .frame, body.alerting .corner,
@@ -350,6 +425,38 @@
     </div>
 
   </main>
+
+  <div class="help" id="help" hidden role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="help-panel">
+      <h2 id="helpTitle">Timer shortcuts</h2>
+      <div class="help-grid">
+        <div class="help-group">
+          <h3>Run the timer</h3>
+          <div class="help-row"><span class="keys"><kbd>Clicker</kbd><kbd>Space</kbd></span>Start or restart</div>
+          <div class="help-row"><span class="keys"><kbd>R</kbd></span>Stop and reset to default</div>
+          <div class="help-row"><span class="keys"><kbd>+</kbd><kbd>−</kbd></span>Add or remove 1 minute</div>
+          <div class="help-row"><span class="keys"><kbd>+</kbd></span>After time's up: 1 more minute</div>
+        </div>
+        <div class="help-group">
+          <h3>Pick a timer</h3>
+          <div class="help-row"><span class="keys"><kbd>3</kbd></span>Roundtable · 30 min</div>
+          <div class="help-row"><span class="keys"><kbd>1</kbd></span>Discussion · 10 min</div>
+          <div class="help-row"><span class="keys"><kbd>B</kbd></span>Break · 15 min</div>
+        </div>
+        <div class="help-group">
+          <h3>Session number</h3>
+          <div class="help-row"><span class="keys"><kbd>]</kbd></span>Raise by one</div>
+          <div class="help-row"><span class="keys"><kbd>[</kbd></span>Lower by one</div>
+        </div>
+        <div class="help-group">
+          <h3>Screen</h3>
+          <div class="help-row"><span class="keys"><kbd>F</kbd></span>Fullscreen on or off</div>
+          <div class="help-row"><span class="keys"><kbd>H</kbd><kbd>Esc</kbd></span>Show or hide this screen</div>
+        </div>
+      </div>
+      <p class="help-foot">The timer keeps running while this is open</p>
+    </div>
+  </div>
 
   <button class="icon-btn" id="resetBtn" type="button" hidden title="Reset the session count to zero">Reset count</button>
   <button class="icon-btn" id="fsBtn" type="button" title="Fullscreen (F)" aria-label="Toggle fullscreen">
@@ -623,9 +730,14 @@
 
   // Presentation clickers send PageDown/PageUp/arrows; keyboard Space/Enter
   const RESTART_KEYS = new Set([' ', 'Spacebar', 'Enter', 'ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'PageDown', 'PageUp']);
+  const help = $('help');
+  help.addEventListener('click', e => { if (e.target === help) help.hidden = true; });
+
   document.addEventListener('keydown', e => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;   // leave browser zoom etc. alone
     const k = e.key;
+    if (k === 'h' || k === 'H' || k === '?') { if (!e.repeat) help.hidden = !help.hidden; return; }
+    if (k === 'Escape' && !help.hidden) { help.hidden = true; return; }
     if (k === '+' || k === '=' || e.code === 'NumpadAdd') { e.preventDefault(); adjust(1); return; }
     if (k === '-' || k === '_' || e.code === 'NumpadSubtract') { e.preventDefault(); adjust(-1); return; }
     if (e.repeat) return;
