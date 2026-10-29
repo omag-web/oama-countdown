@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OAMA Roundtable Timer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Oswald:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  /* Projector-first: single dark look, one accent, everything sized in viewport units */
+  :root {
+    --bg:          #0d0d0d;
+    --surface:     #1a1a1a;
+    --border:      #2e2e2e;
+    --muted:       #5a5a5a;
+    --text-dim:    #9a9a9a;
+    --text:        #e8e8e8;
+    --white:       #f5f5f5;
+    --accent:      #f35227;
+    --accent-dark: #c03e18;
+    --accent-glow: rgba(243, 82, 39, 0.35);
+    --display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+    --ui: 'Oswald', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
+    --ring: min(50vw, 60vh, 580px);
+    color-scheme: dark;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--ui);
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    cursor: default;
+  }
+  body.hide-cursor { cursor: none; }
+
+  /* Dot grid */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Frame */
+  .frame {
+    position: fixed; inset: 18px;
+    border: 1px solid var(--border);
+    pointer-events: none;
+    z-index: 1;
+    transition: border-color .5s, box-shadow .5s;
+  }
+  .corner {
+    position: fixed;
+    width: 44px; height: 44px;
+    z-index: 2;
+    pointer-events: none;
+    border-color: var(--accent);
+    border-style: solid;
+    border-width: 0;
+  }
+  .corner--tl { top: 12px; left: 12px; border-top-width: 3px; border-left-width: 3px; }
+  .corner--tr { top: 12px; right: 12px; border-top-width: 3px; border-right-width: 3px; }
+  .corner--bl { bottom: 12px; left: 12px; border-bottom-width: 3px; border-left-width: 3px; }
+  .corner--br { bottom: 12px; right: 12px; border-bottom-width: 3px; border-right-width: 3px; }
+
+  body.alerting .frame { border-color: var(--accent); animation: framePulse .7s ease-in-out 4; }
+  body.alerting .corner { animation: cornerPulse .7s ease-in-out 4; }
+  body.finished .frame { border-color: var(--accent); animation: framePulse 1.4s ease-in-out infinite; }
+  body.finished .corner { animation: cornerPulse 1.4s ease-in-out infinite; }
+
+  @keyframes framePulse {
+    0%, 100% { box-shadow: inset 0 0 0 0 transparent; }
+    50%      { box-shadow: inset 0 0 60px 6px var(--accent-glow), 0 0 30px 2px var(--accent-glow); }
+  }
+  @keyframes cornerPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50%      { transform: scale(1.35); opacity: .6; }
+  }
+
+  /* Main column */
+  .main {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(10px, 2.2vh, 26px);
+    padding: 4vh 4vw;
+    max-height: 100%;
+  }
+
+  .brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(4px, 1vh, 12px);
+  }
+  .brand img {
+    height: clamp(56px, 11vh, 130px);
+    width: auto;
+    max-width: 60vw;
+    object-fit: contain;
+  }
+  .brand .wordmark {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: clamp(40px, 7vh, 84px);
+    letter-spacing: .06em;
+    color: var(--white);
+    line-height: 1;
+  }
+  .brand .event {
+    font-size: clamp(14px, 2.2vh, 26px);
+    font-weight: 400;
+    letter-spacing: .32em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .session {
+    font-size: clamp(20px, 3.6vh, 44px);
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: .6em;
+    min-height: 1.3em;
+  }
+  .session .rule { width: 2.2em; height: 1px; background: var(--border); }
+  .session.empty { color: var(--text-dim); font-weight: 400; }
+
+  /* Ring */
+  .clock {
+    position: relative;
+    width: var(--ring);
+    height: var(--ring);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .clock svg { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+  .ring-track { fill: none; stroke: var(--surface); stroke-width: 14; }
+  .ring-progress {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 14;
+    stroke-linecap: round;
+    transition: stroke .4s;
+    filter: drop-shadow(0 0 10px var(--accent-glow));
+  }
+  .ring-ticks line { stroke: var(--border); stroke-width: 2; }
+
+  .readout {
+    position: absolute; inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--ring) * 0.02);
+  }
+  .time {
+    font-family: var(--ui);
+    font-weight: 600;
+    font-size: calc(var(--ring) * 0.245);
+    line-height: 1;
+    letter-spacing: .02em;
+    color: var(--white);
+    font-variant-numeric: tabular-nums;
+    transition: color .4s;
+  }
+  .status {
+    font-size: calc(var(--ring) * 0.045);
+    letter-spacing: .3em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding-left: .3em;
+  }
+  body.warn .time { color: var(--accent); }
+  body.finished .time { color: var(--accent); animation: blink 1s steps(2, start) infinite; }
+  body.finished .status { color: var(--white); }
+  @keyframes blink { to { opacity: .35; } }
+
+  /* Mode buttons */
+  .modes { display: flex; gap: clamp(10px, 1.4vw, 20px); }
+  /* Hidden from the audience; fades in only while the mouse is moving */
+  .modes { opacity: 0; pointer-events: none; transition: opacity .4s; }
+  body.show-controls .modes, .modes:focus-within { opacity: 1; pointer-events: auto; }
+  .mode {
+    font-family: var(--ui);
+    font-size: clamp(16px, 2.6vh, 30px);
+    font-weight: 400;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    background: transparent;
+    border: 1px solid var(--border);
+    padding: .5em 1.4em;
+    cursor: pointer;
+    transition: background .2s, color .2s, border-color .2s;
+  }
+  .mode:hover { border-color: var(--muted); color: var(--text); }
+  .mode.active { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+  .mode:focus-visible, .icon-btn:focus-visible { outline: 2px solid var(--white); outline-offset: 3px; }
+
+
+  /* Corner controls */
+  .icon-btn {
+    position: fixed;
+    z-index: 30;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: var(--ui);
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    opacity: .35;
+    transition: opacity .2s, color .2s, border-color .2s;
+  }
+  .icon-btn:hover { opacity: 1; color: var(--text); border-color: var(--border); }
+  #fsBtn { right: 34px; bottom: 34px; width: 40px; height: 40px; display: grid; place-items: center; }
+  #fsBtn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; }
+  #resetBtn { left: 34px; bottom: 34px; font-size: 12px; padding: 8px 10px; }
+
+  /* Milestone flash + banner */
+  .flash {
+    position: fixed; inset: 0;
+    background: var(--accent);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 40;
+  }
+  .flash.go { animation: flash 1.6s ease-out; }
+  @keyframes flash {
+    0%   { opacity: 0; }
+    8%   { opacity: .85; }
+    25%  { opacity: .15; }
+    38%  { opacity: .7; }
+    60%  { opacity: .1; }
+    100% { opacity: 0; }
+  }
+
+  .banner {
+    position: fixed;
+    top: 0; left: 50%;
+    transform: translate(-50%, -110%);
+    z-index: 50;
+    background: var(--accent);
+    color: var(--bg);
+    font-family: var(--ui);
+    font-weight: 600;
+    font-size: clamp(28px, 6vh, 72px);
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    padding: .35em 1.4em .4em;
+    white-space: nowrap;
+    box-shadow: 0 12px 50px rgba(0,0,0,.6);
+    transition: transform .55s cubic-bezier(.2, .9, .3, 1.2);
+  }
+  .banner.show { transform: translate(-50%, 0); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flash.go { animation: none; }
+    body.alerting .frame, body.alerting .corner,
+    body.finished .frame, body.finished .corner,
+    body.finished .time { animation: none; }
+    .banner { transition: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="frame"></div>
+  <div class="corner corner--tl"></div>
+  <div class="corner corner--tr"></div>
+  <div class="corner corner--bl"></div>
+  <div class="corner corner--br"></div>
+
+  <div class="flash" id="flash"></div>
+  <div class="banner" id="banner" role="status" aria-live="assertive"></div>
+
+  <main class="main">
+    <div class="brand">
+      <img id="logo"
+           src="https://images.squarespace-cdn.com/content/v1/5cddbbaa2f4d890001005c42/1565366521285-9RHQEMCJRAG2KXADXLP0/OAMA+Logo.png?format=750w"
+           alt="OAMA — Oklahoma Association of Municipal Attorneys">
+      <div class="wordmark" id="wordmark" hidden>OAMA</div>
+      <div class="event">Conference Roundtables</div>
+    </div>
+
+    <div class="session empty" id="session">
+      <span class="rule"></span><span id="sessionText">Ready</span><span class="rule"></span>
+    </div>
+
+    <div class="clock" id="clock" title="Click to start or restart">
+      <svg viewBox="0 0 200 200" aria-hidden="true">
+        <g class="ring-ticks" id="ticks"></g>
+        <circle class="ring-track" cx="100" cy="100" r="88"></circle>
+        <circle class="ring-progress" id="progress" cx="100" cy="100" r="88"></circle>
+      </svg>
+      <div class="readout">
+        <div class="time" id="time">30:00</div>
+        <div class="status" id="status">Roundtable</div>
+      </div>
+    </div>
+
+    <div class="modes">
+      <button class="mode active" id="mode30" type="button">30 Min</button>
+      <button class="mode" id="mode10" type="button">10 Min</button>
+    </div>
+
+  </main>
+
+  <button class="icon-btn" id="resetBtn" type="button" hidden title="Reset the session count to zero">Reset count</button>
+  <button class="icon-btn" id="fsBtn" type="button" title="Fullscreen (F)" aria-label="Toggle fullscreen">
+    <svg viewBox="0 0 24 24" id="fsIcon"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+  </button>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const body = document.body;
+  const timeEl = $('time'), statusEl = $('status'), progress = $('progress');
+  const banner = $('banner'), flash = $('flash');
+  const STORE_KEY = 'oama-roundtable-session-count';
+
+  // Ring geometry
+  const R = 88, CIRC = 2 * Math.PI * R;
+  progress.style.strokeDasharray = CIRC;
+  progress.style.strokeDashoffset = 0;
+
+  // Minute ticks around the ring
+  const ticks = $('ticks');
+  for (let i = 0; i < 60; i++) {
+    const a = (i / 60) * Math.PI * 2;
+    const r1 = i % 5 === 0 ? 96 : 98, r2 = 101;
+    const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    l.setAttribute('x1', 100 + r1 * Math.cos(a)); l.setAttribute('y1', 100 + r1 * Math.sin(a));
+    l.setAttribute('x2', 100 + r2 * Math.cos(a)); l.setAttribute('y2', 100 + r2 * Math.sin(a));
+    ticks.appendChild(l);
+  }
+
+  // Logo fallback if the image can't load (offline, blocked)
+  const logo = $('logo');
+  logo.addEventListener('error', () => { logo.hidden = true; $('wordmark').hidden = false; });
+
+  // State
+  let durationMin = 30;
+  let endAt = 0;           // timestamp when the current run ends
+  let running = false;
+  let finished = false;
+  let fired = {};          // milestones already shown this run
+  let rafId = 0;
+  let wakeLock = null;
+
+  // Session counter (persists on this machine)
+  let sessionCount = 0;
+  try { sessionCount = parseInt(localStorage.getItem(STORE_KEY), 10) || 0; } catch (e) {}
+  function saveCount() { try { localStorage.setItem(STORE_KEY, String(sessionCount)); } catch (e) {} }
+  function renderSession() {
+    const s = $('session');
+    if (sessionCount > 0) {
+      $('sessionText').textContent = 'Roundtable Session #' + sessionCount;
+      s.classList.remove('empty');
+      $('resetBtn').hidden = false;
+    } else {
+      $('sessionText').textContent = 'Ready';
+      s.classList.add('empty');
+      $('resetBtn').hidden = true;
+    }
+  }
+
+  function fmt(ms) {
+    const total = Math.max(0, Math.ceil(ms / 1000));
+    const m = Math.floor(total / 60), s = total % 60;
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  }
+
+  function setRing(fraction) {
+    progress.style.strokeDashoffset = CIRC * (1 - Math.max(0, Math.min(1, fraction)));
+  }
+
+  function showIdle() {
+    timeEl.textContent = fmt(durationMin * 60000);
+    statusEl.textContent = durationMin === 30 ? 'Roundtable' : 'Ten minutes';
+    setRing(1);
+  }
+
+  function milestone(text) {
+    flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go');
+    body.classList.remove('alerting'); void body.offsetWidth; body.classList.add('alerting');
+    banner.textContent = text;
+    banner.classList.add('show');
+    clearTimeout(milestone.t1); clearTimeout(milestone.t2);
+    milestone.t1 = setTimeout(() => banner.classList.remove('show'), text === "Time's Up" ? 6000 : 4500);
+    milestone.t2 = setTimeout(() => body.classList.remove('alerting'), 3000);
+  }
+
+  function tick() {
+    const left = endAt - Date.now();
+    const totalMs = durationMin * 60000;
+    timeEl.textContent = fmt(left);
+    setRing(left / totalMs);
+
+    const secs = Math.ceil(left / 1000);
+    if (secs <= 300 && totalMs > 300000 && !fired.five) { fired.five = true; milestone('5 Minutes Left'); }
+    if (secs <= 60 && !fired.one) { fired.one = true; milestone('1 Minute Left'); }
+    body.classList.toggle('warn', secs <= 60);
+
+    if (left <= 0) { finish(); return; }
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function start() {
+    cancelAnimationFrame(rafId);
+    finished = false;
+    running = true;
+    fired = {};
+    if (durationMin * 60 <= 300) fired.five = true;
+    body.classList.remove('finished', 'warn', 'alerting');
+    body.classList.add('running');
+    banner.classList.remove('show');
+    statusEl.textContent = durationMin === 30 ? 'Roundtable' : 'Ten minutes';
+    if (durationMin === 30) { sessionCount++; saveCount(); renderSession(); }
+    endAt = Date.now() + durationMin * 60000;
+    requestWake();
+    tick();
+  }
+
+  function finish() {
+    running = false;
+    finished = true;
+    timeEl.textContent = '00:00';
+    setRing(0);
+    statusEl.textContent = "Time's up";
+    body.classList.remove('running', 'warn');
+    body.classList.add('finished');
+    milestone("Time's Up");
+  }
+
+  function setMode(min) {
+    if (min === durationMin && (running || finished)) return;
+    durationMin = min;
+    $('mode30').classList.toggle('active', min === 30);
+    $('mode10').classList.toggle('active', min === 10);
+    cancelAnimationFrame(rafId);
+    running = false; finished = false;
+    body.classList.remove('running', 'finished', 'warn', 'alerting');
+    banner.classList.remove('show');
+    showIdle();
+  }
+
+  // Fullscreen
+  function toggleFullscreen() {
+    const d = document;
+    if (!d.fullscreenElement && !d.webkitFullscreenElement) {
+      const el = d.documentElement;
+      const req = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (req) Promise.resolve(req.call(el)).catch(() => {});
+    } else {
+      const exit = d.exitFullscreen || d.webkitExitFullscreen;
+      if (exit) Promise.resolve(exit.call(d)).catch(() => {});
+    }
+  }
+  document.addEventListener('fullscreenchange', () => {
+    $('fsIcon').innerHTML = document.fullscreenElement
+      ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>'
+      : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>';
+  });
+
+  // Keep the screen awake while presenting
+  async function requestWake() {
+    try {
+      if ('wakeLock' in navigator && !wakeLock) {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+      }
+    } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && running) requestWake();
+  });
+
+  // Inputs
+  $('clock').addEventListener('click', start);
+  $('mode30').addEventListener('click', e => { e.currentTarget.blur(); setMode(30); });
+  $('mode10').addEventListener('click', e => { e.currentTarget.blur(); setMode(10); });
+  $('fsBtn').addEventListener('click', e => { e.currentTarget.blur(); toggleFullscreen(); });
+  $('resetBtn').addEventListener('click', e => {
+    e.currentTarget.blur();
+    sessionCount = 0; saveCount(); renderSession();
+  });
+
+  // Presentation clickers send PageDown/PageUp/arrows; keyboard Space/Enter
+  const RESTART_KEYS = new Set([' ', 'Spacebar', 'Enter', 'ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'PageDown', 'PageUp', 'b', 'B', '.']);
+  document.addEventListener('keydown', e => {
+    if (e.repeat) return;
+    if (RESTART_KEYS.has(e.key)) { e.preventDefault(); start(); return; }
+    if (e.key === '3') setMode(30);
+    else if (e.key === '1') setMode(10);
+    else if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+  });
+
+  // Hide the cursor after a few idle seconds
+  let cursorTimer;
+  document.addEventListener('mousemove', () => {
+    body.classList.remove('hide-cursor');
+    body.classList.add('show-controls');
+    clearTimeout(cursorTimer);
+    cursorTimer = setTimeout(() => {
+      body.classList.add('hide-cursor');
+      if (!document.querySelector('.modes:hover')) body.classList.remove('show-controls');
+    }, 2500);
+  });
+
+  renderSession();
+  showIdle();
+})();
+</script>
+</body>
+</html>
