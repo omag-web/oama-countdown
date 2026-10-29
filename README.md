@@ -10,6 +10,7 @@ Full-screen countdown timer for OAMA Conference roundtable sessions. Open `index
 | `3` | Switch to 30 minutes |
 | `1` | Switch to 10 minutes |
 | `B` | Switch to the break timer (15 minutes) |
+| `R` | Stop and reset the current timer to its default length |
 | `+` / `-` | Add or remove 1 minute (see below) |
 | `F` | Toggle fullscreen |
 
