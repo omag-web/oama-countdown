@@ -351,7 +351,7 @@
 
   </main>
 
-  <button class="icon-btn" id="resetBtn" type="button" hidden title="Reset the session count and timer lengths">Reset</button>
+  <button class="icon-btn" id="resetBtn" type="button" hidden title="Reset the session count to zero">Reset count</button>
   <button class="icon-btn" id="fsBtn" type="button" title="Fullscreen (F)" aria-label="Toggle fullscreen">
     <svg viewBox="0 0 24 24" id="fsIcon"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
   </button>
@@ -395,13 +395,9 @@
   const logo = $('logo');
   logo.addEventListener('error', () => { logo.hidden = true; $('wordmark').hidden = false; });
 
-  // Saved timer lengths (per machine)
+  // Timer lengths. +/- changes these; picking a timer (3 / 1 / B) puts them back to default.
   let lengths = { ...DEFAULTS };
-  try {
-    const saved = JSON.parse(localStorage.getItem(LENGTH_KEY) || 'null');
-    if (saved) for (const k in DEFAULTS) if (Number.isFinite(saved[k])) lengths[k] = saved[k];
-  } catch (e) {}
-  function saveLengths() { try { localStorage.setItem(LENGTH_KEY, JSON.stringify(lengths)); } catch (e) {} }
+  try { localStorage.removeItem(LENGTH_KEY); } catch (e) {}   // clear lengths saved by the older version
 
   // State
   let mode = 'session';
@@ -418,8 +414,6 @@
   try { sessionCount = parseInt(localStorage.getItem(COUNT_KEY), 10) || 0; } catch (e) {}
   function saveCount() { try { localStorage.setItem(COUNT_KEY, String(sessionCount)); } catch (e) {} }
 
-  function isCustomized() { return Object.keys(DEFAULTS).some(k => lengths[k] !== DEFAULTS[k]); }
-
   function renderSession() {
     const s = $('session');
     body.classList.toggle('break-mode', mode === 'break');
@@ -433,7 +427,7 @@
       $('sessionText').textContent = 'Ready';
       s.classList.add('empty');
     }
-    $('resetBtn').hidden = !(sessionCount > 0 || isCustomized());
+    $('resetBtn').hidden = !(sessionCount > 0);
   }
 
   function renderButtons() {
@@ -527,9 +521,10 @@
     milestone(mode === 'break' ? 'Break Is Over' : "Time's Up");
   }
 
+  // Picking a timer always stops it and restores every timer to its default length
   function setMode(next) {
-    if (next === mode && (running || finished)) return;
     mode = next;
+    lengths = { ...DEFAULTS };
     cancelAnimationFrame(rafId);
     running = false; finished = false;
     body.classList.remove('running', 'finished', 'warn', 'alerting');
@@ -563,7 +558,6 @@
       const next = Math.max(1, Math.min(MAX_MIN, lengths[mode] + dir * STEP_MIN));
       if (next === lengths[mode]) return;
       lengths[mode] = next;
-      saveLengths();
       renderButtons();
       renderSession();
       showIdle();
@@ -610,9 +604,7 @@
   $('resetBtn').addEventListener('click', e => {
     e.currentTarget.blur();
     sessionCount = 0; saveCount();
-    lengths = { ...DEFAULTS }; saveLengths();
-    renderButtons(); renderSession();
-    if (!running && !finished) showIdle();
+    renderSession();
   });
 
   // Presentation clickers send PageDown/PageUp/arrows; keyboard Space/Enter
