@@ -4,10 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OAMA Fall 2026 Schedule Display</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Playfair+Display:wght@400;500&display=swap">
 <style>
+  /* Fonts are hosted in ./fonts so the page works offline and never waits on Google */
+  @font-face { font-family: "EB Garamond"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/eb-garamond-latin-400-normal.woff2") format("woff2"); }
+  @font-face { font-family: "EB Garamond"; font-style: normal; font-weight: 500; font-display: swap; src: url("fonts/eb-garamond-latin-500-normal.woff2") format("woff2"); }
+  @font-face { font-family: "EB Garamond"; font-style: normal; font-weight: 600; font-display: swap; src: url("fonts/eb-garamond-latin-600-normal.woff2") format("woff2"); }
+  @font-face { font-family: "EB Garamond"; font-style: italic; font-weight: 400; font-display: swap; src: url("fonts/eb-garamond-latin-400-italic.woff2") format("woff2"); }
+  @font-face { font-family: "Playfair Display"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/playfair-display-latin-400-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Playfair Display"; font-style: normal; font-weight: 500; font-display: swap; src: url("fonts/playfair-display-latin-500-normal.woff2") format("woff2"); }
+  html { background: #151515; }
   /* Layout: fixed 1920x1080 stage scaled to the screen. Header band, title rule row,
      big "now" card left, "up next" + "later today" right, red footer bar with live clock. */
   :root {
