@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OAMA Fall 2026 Schedule Display</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Playfair+Display:wght@400;500&display=swap">
+<style>
+  /* Layout: fixed 1920x1080 stage scaled to the screen. Header band, title rule row,
+     big "now" card left, "up next" + "later today" right, red footer bar with live clock. */
+  :root {
+    --bg: #151515;
+    --bg-lift: #2a2a2a;
+    --band: rgba(255,255,255,.075);
+    --card: rgba(0,0,0,.38);
+    --line: rgba(255,255,255,.14);
+    --fg: #f6f3ef;
+    --muted: rgba(246,243,239,.62);
+    --faint: rgba(246,243,239,.38);
+    --red: #c8240e;
+    --red-text: #e2412a;
+    --display: "Playfair Display", Georgia, "Times New Roman", serif;
+    --serif: "EB Garamond", Garamond, Georgia, "Times New Roman", serif;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    overflow: hidden;
+    font-family: var(--serif);
+  }
+  body.idle { cursor: none; }
+
+  #stage {
+    position: absolute; left: 50%; top: 50%;
+    width: 1920px; height: 1080px;
+    transform-origin: center center;
+    background:
+      radial-gradient(1200px 700px at 50% 55%, var(--bg-lift), transparent 70%),
+      var(--bg);
+    display: grid;
+    grid-template-rows: 150px 132px 1fr 84px;
+    overflow: hidden;
+  }
+
+  /* Header band */
+  .brand {
+    background: var(--band);
+    display: flex; align-items: center; justify-content: center; gap: 26px;
+  }
+  .brand svg { width: 104px; height: 88px; flex: none; }
+  .brand .name {
+    font-family: var(--display); font-weight: 400;
+    font-size: 46px; line-height: 1.04; color: var(--fg);
+  }
+
+  /* Title row with rules */
+  .titlerow {
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 48px;
+  }
+  .titlerow .rule { height: 3px; background: var(--fg); opacity: .92; }
+  .titlerow .t { text-align: center; }
+  .titlerow h1 {
+    margin: 0; font-weight: 400; font-size: 70px; line-height: 1;
+    letter-spacing: -.01em; font-variant-numeric: lining-nums;
+  }
+  .titlerow h1 em { font-style: normal; color: var(--red-text); }
+  .titlerow .day {
+    margin-top: 10px; font-size: 28px; font-weight: 500; color: var(--fg);
+  }
+
+  /* Main */
+  main {
+    display: grid; grid-template-columns: 1.55fr 1fr; gap: 44px;
+    padding: 18px 80px 34px; min-height: 0;
+  }
+  .hero {
+    background: var(--card);
+    border-top: 6px solid var(--red);
+    padding: 40px 52px 40px;
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .eyebrow {
+    display: flex; align-items: center; gap: 16px;
+    font-size: 26px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--red-text);
+  }
+  .eyebrow .pulse {
+    width: 18px; height: 18px; border-radius: 50%; background: var(--red-text);
+    box-shadow: 0 0 0 0 rgba(226,65,42,.6); animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(226,65,42,.55); }
+    70% { box-shadow: 0 0 0 18px rgba(226,65,42,0); }
+    100% { box-shadow: 0 0 0 0 rgba(226,65,42,0); }
+  }
+  .hero .when {
+    margin-top: 22px; font-size: 34px; color: var(--muted);
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  .hero h2 {
+    margin: 10px 0 0; font-weight: 400; font-size: 78px; line-height: 1.04;
+    text-wrap: balance;
+  }
+  .hero.is-break h2 { color: var(--muted); }
+  .hero.is-rt h2 { font-size: 62px; }
+  .hero.is-rt .when { margin-top: 16px; }
+  .hero.is-rt .meter { margin-top: 18px; }
+  .hero .who {
+    margin-top: 22px; font-size: 36px; font-style: italic; color: var(--fg); opacity: .88;
+    text-wrap: balance;
+  }
+  .hero .body { flex: 1; min-height: 0; }
+
+  .tracks { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 28px; }
+  .track { border-left: 3px solid var(--line); padding-left: 26px; min-width: 0; }
+  .track .lab {
+    font-size: 22px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--red-text);
+  }
+  .track .tt { margin-top: 10px; font-size: 44px; line-height: 1.1; text-wrap: balance; }
+  .track .tw { margin-top: 14px; font-size: 28px; font-style: italic; color: var(--muted); }
+
+  .topics {
+    list-style: none; margin: 18px 0 0; padding: 0;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px 36px;
+    font-size: 24px; line-height: 1.18;
+  }
+  .topics li { position: relative; padding-left: 22px; }
+  .topics li::before {
+    content: ""; position: absolute; left: 0; top: .5em; width: 9px; height: 9px; background: var(--red);
+  }
+
+  .meter { margin-top: 26px; }
+  .meter .bar { height: 8px; background: var(--line); overflow: hidden; }
+  .meter .fill { height: 100%; background: var(--red); width: 0; transition: width 1s linear; }
+  .meter .info {
+    display: flex; justify-content: space-between; margin-top: 14px;
+    font-size: 28px; color: var(--muted); font-variant-numeric: lining-nums tabular-nums;
+  }
+  .meter .info b { color: var(--fg); font-weight: 500; }
+
+  /* Right column */
+  aside { display: flex; flex-direction: column; gap: 30px; min-height: 0; }
+  .next {
+    border-top: 3px solid var(--fg);
+    padding-top: 24px;
+  }
+  .next .eyebrow { color: var(--fg); font-size: 24px; }
+  .next .nt { margin-top: 14px; font-size: 48px; line-height: 1.08; text-wrap: balance; }
+  .next .nw { margin-top: 10px; font-size: 28px; font-style: italic; color: var(--muted); }
+  .next .nwhen { margin-top: 12px; font-size: 28px; color: var(--red-text); font-variant-numeric: lining-nums tabular-nums; }
+  .next .ntracks { margin-top: 14px; display: grid; gap: 12px; }
+  .next .ntracks div { font-size: 32px; line-height: 1.12; }
+  .next .ntracks span {
+    display: block; font-size: 19px; letter-spacing: .16em; text-transform: uppercase; color: var(--faint); margin-bottom: 2px;
+  }
+
+  .later { border-top: 1px solid var(--line); padding-top: 22px; min-height: 0; overflow: hidden; }
+  .later .eyebrow { color: var(--muted); font-size: 22px; }
+  .later ul { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 12px; }
+  .later li {
+    display: grid; grid-template-columns: 116px 1fr; gap: 18px; align-items: baseline;
+    font-size: 29px; line-height: 1.18;
+  }
+  .later li time { color: var(--muted); font-variant-numeric: lining-nums tabular-nums; }
+  .later li.brk { color: var(--faint); font-size: 24px; }
+  .later li.brk time { color: var(--faint); }
+  .later .empty { margin-top: 14px; font-size: 28px; color: var(--muted); font-style: italic; }
+
+  /* Footer */
+  footer {
+    background: var(--red);
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+    padding: 0 80px; font-size: 32px; font-weight: 500; color: #fff;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  footer .clock { font-size: 40px; font-weight: 500; letter-spacing: .02em; }
+  footer .r { text-align: right; }
+
+  #preview {
+    position: absolute; top: 20px; right: 24px; z-index: 5;
+    background: #000; color: #fff; border: 2px solid var(--red-text);
+    font: 600 22px/1 var(--serif); letter-spacing: .08em; padding: 10px 14px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .eyebrow .pulse { animation: none; }
+    .meter .fill { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="stage" aria-live="polite">
+  <div class="brand">
+    <svg viewBox="0 0 104 88" aria-hidden="true">
+      <g fill="#f6f3ef" stroke="#f6f3ef">
+        <circle cx="52" cy="7" r="4.5" stroke="none"/>
+        <rect x="49.5" y="10" width="5" height="64" stroke="none"/>
+        <path d="M30 76h44l-4-5H34z" stroke="none"/>
+        <rect x="26" y="77" width="52" height="5" rx="1.5" stroke="none"/>
+        <path d="M12 20 Q52 12 92 20" fill="none" stroke-width="4" stroke-linecap="round"/>
+        <g fill="none" stroke-width="1.6">
+          <path d="M14 21 L3 52 M14 21 L25 52"/>
+          <path d="M90 21 L79 52 M90 21 L101 52"/>
+        </g>
+        <path d="M1 52 h26 q-2 10 -13 10 q-11 0 -13 -10z" stroke="none"/>
+        <path d="M77 52 h26 q-2 10 -13 10 q-11 0 -13 -10z" stroke="none"/>
+      </g>
+    </svg>
+    <div class="name">Oklahoma Association<br>of Municipal Attorneys</div>
+  </div>
+
+  <div class="titlerow">
+    <div class="rule"></div>
+    <div class="t">
+      <h1>2026 FALL <em>CONFERENCE</em></h1>
+      <div class="day" id="dayLabel">Advocating for Oklahoma Communities</div>
+    </div>
+    <div class="rule"></div>
+  </div>
+
+  <main>
+    <section class="hero" id="hero"></section>
+    <aside>
+      <div class="next" id="next"></div>
+      <div class="later" id="later"></div>
+    </aside>
+  </main>
+
+  <footer>
+    <div>www.okmunicipalattorneys.org</div>
+    <div class="clock" id="clock">--:--</div>
+    <div class="r">NOUN Hotel · Norman</div>
+  </footer>
+
+  <div id="preview" hidden></div>
+</div>
+
+<script>
+/* ============================================================
+   SCHEDULE DATA — edit here.
+   Times are 24-hour Central Time (CST, UTC-6 in November).
+   kind: session | meal | break | tracks | roundtable
+   ============================================================ */
+const UTC_OFFSET_HOURS = -6;
+
+const ROUNDTABLE_TOPICS = [
+  "Code Enforcement Best Practices",
+  "Use of AI",
+  "OWRB Loans and Grants",
+  "Fair Housing Requirements/ADA/Reasonable Accommodation in Zoning Ordinances",
+  "Solicitation Ordinances",
+  "Managing Police Liability",
+  "Public Trusts",
+  "New Municipal Attorneys",
+  "Economic Development Agreements",
+  "Managing Risk with Sanitary Sewer System",
+  "Competitive Bidding"
+];
+
+const DAYS = [
+  { y: 2026, m: 11, d: 5, label: "Thursday, November 5", slots: [
+    { s: "11:00", e: "11:30", kind: "session", title: "Board of Directors Meeting" },
+    { s: "11:30", e: "12:00", kind: "meal", title: "Registration and Lunch Buffet" },
+    { s: "12:00", e: "12:50", kind: "meal", title: "Lunch and Ethics", who: "Zana Williams" },
+    { s: "13:00", e: "13:50", kind: "session", title: "Limited Public Forums" },
+    { s: "13:50", e: "14:00", kind: "break", title: "Break" },
+    { s: "14:00", e: "14:50", kind: "session", title: "Data Center Panel", who: "David Weatherford, Tammy Ewing, Patrick Boulden and Adam Heavin" },
+    { s: "14:50", e: "15:00", kind: "break", title: "Break" },
+    { s: "15:00", e: "15:50", kind: "session", title: "Judicial Panel" }
+  ]},
+  { y: 2026, m: 11, d: 6, label: "Friday, November 6", slots: [
+    { s: "08:30", e: "09:00", kind: "meal", title: "Registration & Continental Breakfast" },
+    { s: "09:00", e: "09:50", kind: "tracks", title: "Breakout Sessions", tracks: [
+      { title: "Interlocal Agreements", who: "Nikki Batt, Oklahoma Attorney General’s Office, and David Weatherford" },
+      { title: "Water Rights", who: "Sara Gibson, OWRB General Counsel" }
+    ]},
+    { s: "09:50", e: "10:00", kind: "break", title: "Break" },
+    { s: "10:00", e: "10:50", kind: "tracks", title: "Breakout Sessions", tracks: [
+      { title: "Public Safety Investigations from the Perspective of a Union Attorney", who: "Sean McKenna" },
+      { title: "Employment Law Update", who: "Phil Bruce" }
+    ]},
+    { s: "10:50", e: "11:00", kind: "break", title: "Break" },
+    { s: "11:00", e: "11:50", kind: "session", title: "Ethics – Who Is My Client?" },
+    { s: "12:00", e: "12:50", kind: "meal", title: "Luncheon with Keynote Speaker" },
+    { s: "13:00", e: "13:30", kind: "roundtable", title: "Roundtable 1" },
+    { s: "13:30", e: "14:00", kind: "roundtable", title: "Roundtable 2" },
+    { s: "14:00", e: "14:10", kind: "break", title: "Break" },
+    { s: "14:10", e: "14:40", kind: "roundtable", title: "Roundtable 3" },
+    { s: "14:40", e: "15:10", kind: "roundtable", title: "Roundtable 4" }
+  ]}
+];
+
+/* ============================================================
+   Engine
+   ============================================================ */
+const MIN = 60000;
+function at(day, hhmm) {
+  const [h, m] = hhmm.split(":").map(Number);
+  return Date.UTC(day.y, day.m - 1, day.d, h - UTC_OFFSET_HOURS, m);
+}
+const SLOTS = [];
+DAYS.forEach((day, di) => day.slots.forEach(sl => {
+  SLOTS.push(Object.assign({}, sl, { day: di, start: at(day, sl.s), end: at(day, sl.e) }));
+}));
+
+const TZ = "America/Chicago";
+const fmtTime = new Intl.DateTimeFormat("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" });
+const fmtDate = new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "long", month: "long", day: "numeric" });
+
+function hm(ms) { return fmtTime.format(ms).replace(/\s?[AP]M$/, ""); }
+function ap(ms) { return fmtTime.format(ms).match(/[AP]M$/)[0]; }
+function clockText(ms) { return fmtTime.format(ms); }
+function range(s) {
+  return ap(s.start) === ap(s.end)
+    ? `${hm(s.start)} – ${hm(s.end)} ${ap(s.end)}`
+    : `${clockText(s.start)} – ${clockText(s.end)}`;
+}
+function until(ms) {
+  const mins = Math.ceil(ms / MIN);
+  if (mins <= 1) return "in 1 min";
+  if (mins < 60) return `in ${mins} min`;
+  const h = Math.floor(mins / 60), m = mins % 60;
+  if (h < 24) return `in ${h} hr${m ? " " + m + " min" : ""}`;
+  const d = Math.floor(h / 24), rh = h % 24;
+  return `in ${d} day${d > 1 ? "s" : ""}${rh ? ", " + rh + " hr" : ""}`;
+}
+function esc(t) { return String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
+
+/* Preview offset (arrow keys) — 0 means live */
+let offset = 0;
+function now() { return Date.now() + offset; }
+
+const $ = id => document.getElementById(id);
+
+function heroBody(s) {
+  if (s.kind === "tracks") {
+    return `<div class="tracks">${s.tracks.map((t, i) => `
+      <div class="track"><div class="lab">Track ${i + 1}</div>
+        <div class="tt">${esc(t.title)}</div>
+        ${t.who ? `<div class="tw">${esc(t.who)}</div>` : ""}</div>`).join("")}</div>`;
+  }
+  if (s.kind === "roundtable") {
+    return `<ul class="topics">${ROUNDTABLE_TOPICS.map(t => `<li>${esc(t)}</li>`).join("")}</ul>`;
+  }
+  return s.who ? `<div class="who">${esc(s.who)}</div>` : "";
+}
+
+function heroTitle(s) {
+  if (s.kind === "tracks") return "Breakout Sessions";
+  return esc(s.title);
+}
+
+function renderHero(t, s, mode) {
+  const el = $("hero");
+  el.className = "hero" + (s && s.kind === "break" ? " is-break" : "") + (s && s.kind === "roundtable" ? " is-rt" : "");
+  if (mode === "done") {
+    el.innerHTML = `
+      <div class="eyebrow">That’s a Wrap</div>
+      <div class="body">
+        <h2 style="margin-top:28px">Thank you for attending the 2026 Fall Conference</h2>
+        <div class="who">Speaker handouts are posted at okmunicipalattorneys.org</div>
+      </div>`;
+    return;
+  }
+  let eyebrow, meter;
+  if (mode === "now") {
+    const pct = Math.min(100, (t - s.start) / (s.end - s.start) * 100);
+    eyebrow = `<div class="eyebrow"><span class="pulse"></span>Happening Now</div>`;
+    meter = `<div class="meter"><div class="bar"><div class="fill" style="width:${pct.toFixed(1)}%"></div></div>
+      <div class="info"><span>Ends <b>${clockText(s.end)}</b></span><span>${Math.ceil((s.end - t) / MIN)} min remaining</span></div></div>`;
+  } else {
+    const soon = s.start - t <= 90 * MIN;
+    eyebrow = `<div class="eyebrow">${soon ? "Starting Soon" : "Coming Up"}</div>`;
+    meter = `<div class="meter"><div class="info"><span>Begins <b>${soon ? clockText(s.start) : fmtDate.format(s.start) + " · " + clockText(s.start)}</b></span><span>${until(s.start - t)}</span></div></div>`;
+  }
+  el.innerHTML = `
+    ${eyebrow}
+    <div class="when">${range(s)}${s.kind === "roundtable" ? " · Choose any table" : ""}</div>
+    <h2>${heroTitle(s)}</h2>
+    <div class="body">${heroBody(s)}</div>
+    ${meter}`;
+}
+
+function renderNext(s, heroSlot) {
+  const el = $("next");
+  if (!s) {
+    el.innerHTML = `<div class="eyebrow">Up Next</div><div class="nt">${heroSlot ? "Last session of the conference" : "See you next year"}</div>`;
+    return;
+  }
+  const otherDay = heroSlot && s.day !== heroSlot.day;
+  const when = otherDay ? `${DAYS[s.day].label.split(",")[0]} · ${clockText(s.start)}` : range(s);
+  let inner;
+  if (s.kind === "tracks") {
+    inner = `<div class="ntracks">${s.tracks.map((tr, i) => `<div><span>Track ${i + 1}</span>${esc(tr.title)}</div>`).join("")}</div>`;
+  } else {
+    inner = `<div class="nt">${esc(s.kind === "roundtable" ? s.title + " · Roundtables" : s.title)}</div>${s.who ? `<div class="nw">${esc(s.who)}</div>` : ""}`;
+  }
+  el.innerHTML = `<div class="eyebrow">${otherDay ? "Next Day" : "Up Next"}</div>${inner}<div class="nwhen">${when}</div>`;
+}
+
+function renderLater(list, dayIdx) {
+  const el = $("later");
+  if (!list.length) {
+    el.innerHTML = `<div class="eyebrow">Later Today</div><div class="empty">Nothing else on the schedule for ${DAYS[dayIdx].label.split(",")[0]}.</div>`;
+    return;
+  }
+  el.innerHTML = `<div class="eyebrow">Later Today</div><ul>${list.map(s => {
+    const label = s.kind === "tracks" ? s.tracks.map(x => x.title).join(" / ")
+      : s.kind === "roundtable" ? s.title : s.title;
+    return `<li class="${s.kind === "break" ? "brk" : ""}"><time>${hm(s.start)}</time><span>${esc(label)}</span></li>`;
+  }).join("")}</ul>`;
+}
+
+function render() {
+  const t = now();
+  $("clock").textContent = clockText(t);
+
+  const prev = $("preview");
+  if (offset) { prev.hidden = false; prev.textContent = "PREVIEW · " + fmtDate.format(t).split(",")[0].toUpperCase() + " " + clockText(t) + "  (0 = live)"; }
+  else prev.hidden = true;
+
+  const last = SLOTS[SLOTS.length - 1];
+  if (t >= last.end) {
+    $("dayLabel").textContent = "Advocating for Oklahoma Communities";
+    renderHero(t, null, "done");
+    renderNext(null, null);
+    renderLater([], last.day);
+    return;
+  }
+
+  const curIdx = SLOTS.findIndex(s => s.start <= t && t < s.end);
+  const heroIdx = curIdx >= 0 ? curIdx : SLOTS.findIndex(s => s.start > t);
+  const hero = SLOTS[heroIdx];
+  const nextSlot = SLOTS[heroIdx + 1] || null;
+
+  $("dayLabel").textContent = DAYS[hero.day].label + ", 2026";
+  renderHero(t, hero, curIdx >= 0 ? "now" : "soon");
+  renderNext(nextSlot, hero);
+
+  const later = SLOTS.slice(heroIdx + 2).filter(s => s.day === hero.day).slice(0, 6);
+  renderLater(nextSlot && nextSlot.day === hero.day ? later : [], hero.day);
+}
+
+/* Scale the 1920x1080 stage to fit any screen */
+function fit() {
+  const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+  $("stage").style.transform = `translate(-50%, -50%) scale(${s})`;
+}
+window.addEventListener("resize", fit);
+
+/* Keys: ←/→ ±5 min, Shift ±1 hr, [ / ] ±1 day, 0 back to live, F fullscreen */
+document.addEventListener("keydown", e => {
+  const step = e.shiftKey ? 60 * MIN : 5 * MIN;
+  if (e.key === "ArrowRight") offset += step;
+  else if (e.key === "ArrowLeft") offset -= step;
+  else if (e.key === "]") offset += 1440 * MIN;
+  else if (e.key === "[") offset -= 1440 * MIN;
+  else if (e.key === "0") offset = 0;
+  else if (e.key === "f" || e.key === "F") toggleFS();
+  else return;
+  render();
+});
+function toggleFS() {
+  try {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen().catch(() => {});
+  } catch (_) {}
+}
+document.addEventListener("dblclick", toggleFS);
+
+/* Hide cursor when idle; keep the screen awake */
+let idleT;
+document.addEventListener("mousemove", () => {
+  document.body.classList.remove("idle");
+  clearTimeout(idleT);
+  idleT = setTimeout(() => document.body.classList.add("idle"), 3000);
+});
+async function wake() {
+  try { if ("wakeLock" in navigator) await navigator.wakeLock.request("screen"); } catch (_) {}
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") wake(); });
+
+fit();
+render();
+wake();
+setInterval(render, 1000);
+</script>
+</body>
+</html>

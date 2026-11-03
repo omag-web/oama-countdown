@@ -21,3 +21,18 @@ Full-screen countdown timer for OAMA Conference roundtable sessions. Open `index
 - Alerts flash at 5:00, 1:00, and 0:00.
 - "Roundtable Session #N" counts each 30-minute start and is saved in the browser. The faint Reset count button in the bottom-left corner clears it.
 - The OAMA logo loads from Squarespace; offline, an "OAMA" wordmark shows instead.
+
+# OAMA Schedule Display
+
+A 16:9 projector page in `schedule/index.html` that shows the 2026 Fall Conference schedule. It updates itself: the big card shows what is happening now (or starting soon), and the right side shows what's up next and later that day. Times are Central.
+
+Edit the schedule in the `SCHEDULE DATA` block at the top of the script. Add a speaker with `who: "Name"`.
+
+| Key | Action |
+| --- | --- |
+| `←` / `→` | Preview 5 minutes earlier or later (hold Shift for 1 hour) |
+| `[` / `]` | Preview a day earlier or later |
+| `0` | Return to live time |
+| `F` or double-click | Toggle fullscreen |
+
+A "Preview" badge shows while you're off live time. The cursor hides after 3 seconds.
